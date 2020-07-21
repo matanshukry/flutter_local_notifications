@@ -913,10 +913,11 @@ public class FlutterLocalNotificationsPlugin extends BroadcastReceiver
 
     private void initializeDismissNotificationCallback(long setupCallbackHandle,
                                                        long dismissNotificationCallbackHandle) {
-        FlutterLocalNotificationsService.setBackgroundSetupHandle(mainActivity, setupCallbackHandle);
-        FlutterLocalNotificationsService.startBackgroundIsolate(mainActivity, setupCallbackHandle);
+        final Context context = mainActivity != null ? mainActivity : applicationContext;
+        FlutterLocalNotificationsService.setBackgroundSetupHandle(context, setupCallbackHandle);
+        FlutterLocalNotificationsService.startBackgroundIsolate(context, setupCallbackHandle);
         FlutterLocalNotificationsService.setDismissNotificationHandle(
-            mainActivity, dismissNotificationCallbackHandle);
+            context, dismissNotificationCallbackHandle);
     }
 
     /// Extracts the details of the notifications passed from the Flutter side and also validates that some of the details (especially resources) passed are valid
