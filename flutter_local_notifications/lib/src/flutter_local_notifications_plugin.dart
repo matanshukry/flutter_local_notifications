@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications_platform_interface/flutter_local_notifications_platform_interface.dart';
@@ -91,13 +92,13 @@ class FlutterLocalNotificationsPlugin {
   /// [requestPermissions] can then be called to request permissions when needed.
   Future<bool> initialize(InitializationSettings initializationSettings,
       {SelectNotificationCallback onSelectNotification,
-        DismissNotificationCallback onDismissNotification}) async {
+      DismissNotificationCallback onDismissNotification}) async {
     if (_platform.isAndroid) {
       return await resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
           ?.initialize(initializationSettings?.android,
               onSelectNotification: onSelectNotification,
-          onDismissNotification: onDismissNotification);
+              onDismissNotification: onDismissNotification);
     } else if (_platform.isIOS) {
       return await resolvePlatformSpecificImplementation<
               IOSFlutterLocalNotificationsPlugin>()
