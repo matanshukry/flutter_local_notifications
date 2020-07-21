@@ -346,12 +346,15 @@ public class NotificationDetails {
         return new PersonDetails(bot, icon, iconSource, important, key, name, uri);
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "ConstantConditions"})
     private static ArrayList<MessageDetails> readMessages(ArrayList<Map<String, Object>> messages) {
         ArrayList<MessageDetails> result = new ArrayList<>();
         if (messages != null) {
             for (Map<String, Object> messageData : messages) {
-                result.add(new MessageDetails((String) messageData.get(TEXT), (Long) messageData.get(TIMESTAMP), readPersonDetails((Map<String, Object>) messageData.get(PERSON)), (String) messageData.get(DATA_MIME_TYPE), (String) messageData.get(DATA_URI)));
+                result.add(new MessageDetails((String) messageData.get(TEXT),
+                    ((Number) messageData.get(TIMESTAMP)).longValue(),
+                    readPersonDetails((Map<String, Object>) messageData.get(PERSON)),
+                    (String) messageData.get(DATA_MIME_TYPE), (String) messageData.get(DATA_URI)));
             }
         }
         return result;
