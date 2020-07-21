@@ -10,7 +10,6 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
@@ -23,6 +22,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.flutter.Log;
+import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.PluginRegistry;
 import io.flutter.view.FlutterCallbackInformation;
@@ -44,6 +44,8 @@ public class FlutterLocalNotificationsService extends Service {
 
   private final static List<String> backgroundDismissedNotificationsQueue =
       Collections.synchronizedList(new LinkedList<String>());
+
+  private static AtomicBoolean isBackgroundInitialized = new AtomicBoolean(false);
 
   /**
    * Background Dart execution context.
@@ -84,10 +86,6 @@ public class FlutterLocalNotificationsService extends Service {
       final String payload = intent.getStringExtra(FlutterLocalNotificationsPlugin.PAYLOAD);
       onNotificationDismissed(payload);
     }
-  }
-
-  public static void setBackgroundChannel(MethodChannel channel) {
-    backgroundChannel = channel;
   }
 
   private void onNotificationDismissed(final String payload) {
@@ -164,7 +162,7 @@ public class FlutterLocalNotificationsService extends Service {
     if (!isIsolateRunning.get()) {
       SharedPreferences p = backgroundContext.getSharedPreferences(SHARED_PREFERENCES_KEY, 0);
       long callbackHandle = p.getLong(BACKGROUND_SETUP_CALLBACK_HANDLE_KEY, 0);
-      startBackgroundIsolate(backgroundContext, callbackHandle);
+      startBackgroundIsolate(new BackgroundIsolateMethodCallHandler(), backgroundContext, callbackHandle);
     }
   }
 
@@ -216,11 +214,21 @@ public class FlutterLocalNotificationsService extends Service {
    * side. Called either by the plugin when the app is starting up or when a dismiss
    * notification is called
    *
-   * @param context        Registrar or FirebaseMessagingService context.
-   * @param callbackHandle Handle used to retrieve the Dart function that sets up background
-   *                       handling on the dart side.
+   * @param methodCallHandler a method call handler impl that handles the call from dart side.
+   *                          {@link BackgroundIsolateMethodCallHandler}.
+   * @param context           Registrar or FirebaseMessagingService context.
+   * @param callbackHandle    Handle used to retrieve the Dart function that sets up background
+   *                          handling on the dart side.
    */
-  public static void startBackgroundIsolate(Context context, long callbackHandle) {
+  public static void startBackgroundIsolate(
+      final BackgroundIsolateMethodCallHandler methodCallHandler,
+      Context context,
+      long callbackHandle) {
+    if (isBackgroundInitialized.get()) {
+      return;
+    }
+
+    isBackgroundInitialized.set(true);
     FlutterMain.ensureInitializationComplete(context, null);
 
     final FlutterCallbackInformation flutterCallback =
@@ -231,6 +239,7 @@ public class FlutterLocalNotificationsService extends Service {
     // for example, when callbackHandle is 0. Could be in other cases as well though
     if (flutterCallback == null) {
       Log.e(TAG, "Fatal: failed to find callback");
+      isBackgroundInitialized.set(false);
       return;
     }
 
@@ -238,9 +247,17 @@ public class FlutterLocalNotificationsService extends Service {
     // FlutterNativeView constructor. This specifies the FlutterNativeView
     // as a background view and does not create a drawing surface.
     backgroundFlutterView = new FlutterNativeView(context, true);
-    String appBundlePath = FlutterMain.findAppBundlePath();
+
+    backgroundChannel =
+        new MethodChannel(
+            backgroundFlutterView.getDartExecutor().getBinaryMessenger(),
+            "dexterous.com/flutter/local_notifications_background");
+    backgroundChannel.setMethodCallHandler(methodCallHandler);
+
+    final String appBundlePath = FlutterMain.findAppBundlePath();
     if (!isIsolateRunning.get()) {
       if (pluginRegistrantCallback == null) {
+        isBackgroundInitialized.set(false);
         throw new RuntimeException("PluginRegistrantCallback is not set.");
       }
       FlutterRunArguments args = new FlutterRunArguments();
@@ -257,8 +274,7 @@ public class FlutterLocalNotificationsService extends Service {
       String payload,
       final CountDownLatch latch) {
     if (backgroundChannel == null) {
-      throw new RuntimeException(
-          "setBackgroundChannel was not called before event came in, exiting.");
+      throw new RuntimeException("backgroundChannel is null, exiting.");
     }
 
     // If another thread is waiting, then wake that thread when the callback returns a result.
@@ -324,6 +340,18 @@ public class FlutterLocalNotificationsService extends Service {
 
     public MethodChannel.Result getResult() {
       return result;
+    }
+  }
+
+  public static class BackgroundIsolateMethodCallHandler implements MethodChannel.MethodCallHandler {
+    private static final String DART_SERVICE_INITIALIZED_COMPLETE_METHOD = "localNotificationDartService#initialized";
+
+    @Override
+    public void onMethodCall(MethodCall call, MethodChannel.Result result) {
+      if (DART_SERVICE_INITIALIZED_COMPLETE_METHOD.equals(call.method)) {
+        FlutterLocalNotificationsService.onInitialized();
+        result.success(true);
+      }
     }
   }
 }

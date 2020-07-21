@@ -89,7 +89,6 @@ public class FlutterLocalNotificationsPlugin extends BroadcastReceiver
     public static final String DISMISS_NOTIFICATION = "DISMISS_NOTIFICATION";
     private static final String SCHEDULED_NOTIFICATIONS = "scheduled_notifications";
     private static final String INITIALIZE_METHOD = "initialize";
-    private static final String DART_SERVICE_INITIALIZED_COMPLETE_METHOD = "localNotificationDartService#initialized";
     private static final String CREATE_NOTIFICATION_CHANNEL_METHOD = "createNotificationChannel";
     private static final String DELETE_NOTIFICATION_CHANNEL_METHOD = "deleteNotificationChannel";
     private static final String PENDING_NOTIFICATION_REQUESTS_METHOD = "pendingNotificationRequests";
@@ -730,12 +729,6 @@ public class FlutterLocalNotificationsPlugin extends BroadcastReceiver
         this.channel = new MethodChannel(binaryMessenger, METHOD_CHANNEL);
         this.channel.setMethodCallHandler(this);
 
-        // Background Channel
-        final MethodChannel backgroundCallbackChannel =
-            new MethodChannel(binaryMessenger, "dexterous.com/flutter/local_notifications_background");
-        backgroundCallbackChannel.setMethodCallHandler(this);
-        FlutterLocalNotificationsService.setBackgroundChannel(backgroundCallbackChannel);
-
         // Register broadcast receiver
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(FlutterLocalNotificationsService.ACTION_NOTIFICATION_DISMISSED);
@@ -779,11 +772,6 @@ public class FlutterLocalNotificationsPlugin extends BroadcastReceiver
         switch (call.method) {
             case INITIALIZE_METHOD: {
                 initialize(call, result);
-                break;
-            }
-            case DART_SERVICE_INITIALIZED_COMPLETE_METHOD: {
-                FlutterLocalNotificationsService.onInitialized();
-                result.success(true);
                 break;
             }
             case GET_NOTIFICATION_APP_LAUNCH_DETAILS_METHOD: {
@@ -915,7 +903,6 @@ public class FlutterLocalNotificationsPlugin extends BroadcastReceiver
                                                        long dismissNotificationCallbackHandle) {
         final Context context = mainActivity != null ? mainActivity : applicationContext;
         FlutterLocalNotificationsService.setBackgroundSetupHandle(context, setupCallbackHandle);
-        FlutterLocalNotificationsService.startBackgroundIsolate(context, setupCallbackHandle);
         FlutterLocalNotificationsService.setDismissNotificationHandle(
             context, dismissNotificationCallbackHandle);
     }
