@@ -8,9 +8,10 @@ import android.os.Bundle;
 import io.flutter.embedding.android.FlutterActivity;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.plugin.common.MethodChannel;
+import io.flutter.plugin.common.PluginRegistry;
 import io.flutter.plugins.GeneratedPluginRegistrant;
 
-public class MainActivity extends FlutterActivity {
+public class MainActivity extends FlutterActivity implements PluginRegistry.PluginRegistrantCallback {
     private static String resourceToUriString(Context context, int resId) {
         return
                 ContentResolver.SCHEME_ANDROID_RESOURCE
@@ -36,4 +37,9 @@ public class MainActivity extends FlutterActivity {
                     }
                 });
     }
+
+  @Override
+  public void registerWith(PluginRegistry registry) {
+    FlutterLocalNotificationsPluginRegistrant.registerWith(registry);
+  }
 }

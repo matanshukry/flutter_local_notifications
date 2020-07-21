@@ -1,12 +1,14 @@
 import 'dart:async';
+import 'dart:ui';
 
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_local_notifications_platform_interface/flutter_local_notifications_platform_interface.dart';
 
 import 'helpers.dart';
-import 'platform_specifics/android/notification_channel.dart';
 import 'platform_specifics/android/initialization_settings.dart';
+import 'platform_specifics/android/notification_channel.dart';
 import 'platform_specifics/android/notification_details.dart';
 import 'platform_specifics/ios/initialization_settings.dart';
 import 'platform_specifics/ios/notification_details.dart';
@@ -14,7 +16,36 @@ import 'typedefs.dart';
 import 'types.dart';
 
 const MethodChannel _channel =
-    MethodChannel('dexterous.com/flutter/local_notifications');
+MethodChannel('dexterous.com/flutter/local_notifications');
+
+
+void _setupBackgroundChannel({
+  MethodChannel backgroundChannel = const MethodChannel(
+      'dexterous.com/flutter/local_notifications_background'),
+}) async {
+  // Setup Flutter state needed for MethodChannels.
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // This is where the magic happens and we handle background events from the
+  // native portion of the plugin.
+  backgroundChannel.setMethodCallHandler((MethodCall call) async {
+    if (call.method == 'handleBackgroundNotificationEvent') {
+      final handle = CallbackHandle.fromRawHandle(call.arguments['handle']);
+      final handlerFunction = PluginUtilities.getCallbackFromHandle(handle);
+      try {
+        await handlerFunction((call.arguments['payload']) as String);
+      } catch (e) {
+        print('Unable to handle incoming background notification event.');
+        print(e);
+      }
+      return Future<void>.value();
+    }
+  });
+
+  //
+  await backgroundChannel
+      .invokeMethod<void>('localNotificationDartService#initialized');
+}
 
 /// An implementation of a local notifications platform using method channels.
 class MethodChannelFlutterLocalNotificationsPlugin
@@ -33,7 +64,7 @@ class MethodChannelFlutterLocalNotificationsPlugin
   @override
   Future<NotificationAppLaunchDetails> getNotificationAppLaunchDetails() async {
     final result =
-        await _channel.invokeMethod('getNotificationAppLaunchDetails');
+    await _channel.invokeMethod('getNotificationAppLaunchDetails');
     return NotificationAppLaunchDetails(result['notificationLaunchedApp'],
         result.containsKey('payload') ? result['payload'] : null);
   }
@@ -41,9 +72,10 @@ class MethodChannelFlutterLocalNotificationsPlugin
   @override
   Future<List<PendingNotificationRequest>> pendingNotificationRequests() async {
     final List<Map<dynamic, dynamic>> pendingNotifications =
-        await _channel.invokeListMethod('pendingNotificationRequests');
+    await _channel.invokeListMethod('pendingNotificationRequests');
     return pendingNotifications
-        .map((pendingNotification) => PendingNotificationRequest(
+        .map((pendingNotification) =>
+        PendingNotificationRequest(
             pendingNotification['id'],
             pendingNotification['title'],
             pendingNotification['body'],
@@ -56,16 +88,37 @@ class MethodChannelFlutterLocalNotificationsPlugin
 class AndroidFlutterLocalNotificationsPlugin
     extends MethodChannelFlutterLocalNotificationsPlugin {
   SelectNotificationCallback _onSelectNotification;
+  DismissNotificationCallback _onDismissNotification;
 
   /// Initializes the plugin. Call this method on application before using the plugin further.
   /// This should only be done once. When a notification created by this plugin was used to launch the app,
   /// calling `initialize` is what will trigger to the `onSelectNotification` callback to be fire.
   Future<bool> initialize(AndroidInitializationSettings initializationSettings,
-      {SelectNotificationCallback onSelectNotification}) async {
+      {SelectNotificationCallback onSelectNotification,
+        DismissNotificationCallback onDismissNotification}) async {
     _onSelectNotification = onSelectNotification;
+    _onDismissNotification = onDismissNotification;
     _channel.setMethodCallHandler(_handleMethod);
+
+    final onDismissNotificationCallbackHandle =
+        PluginUtilities.getCallbackHandle(onDismissNotification)
+            ?.toRawHandle() ??
+            0;
+
+    // Only setup background if onDismissed is configured
+    final setupBackgroundCallbackHandle =
+        ((onDismissNotificationCallbackHandle == 0)
+            ? null
+            : PluginUtilities.getCallbackHandle(_setupBackgroundChannel)
+            ?.toRawHandle()) ??
+            0;
+
     return await _channel.invokeMethod(
-        'initialize', initializationSettings.toMap());
+        'initialize',
+        initializationSettings.toMap(
+          setupBackgroundCallbackHandle,
+          onDismissNotificationCallbackHandle,
+        ));
   }
 
   /// Schedules a notification to be shown at the specified time with an optional payload that is passed through when a notification is tapped.
@@ -98,7 +151,9 @@ class AndroidFlutterLocalNotificationsPlugin
       'id': id,
       'title': title,
       'body': body,
-      'calledAt': DateTime.now().millisecondsSinceEpoch,
+      'calledAt': DateTime
+          .now()
+          .millisecondsSinceEpoch,
       'repeatInterval': RepeatInterval.Daily.index,
       'repeatTime': notificationTime.toMap(),
       'platformSpecifics': notificationDetails?.toMap(),
@@ -107,8 +162,7 @@ class AndroidFlutterLocalNotificationsPlugin
   }
 
   /// Shows a notification on weekly interval at the specified day and time.
-  Future<void> showWeeklyAtDayAndTime(
-      int id,
+  Future<void> showWeeklyAtDayAndTime(int id,
       String title,
       String body,
       Day day,
@@ -121,7 +175,9 @@ class AndroidFlutterLocalNotificationsPlugin
       'id': id,
       'title': title,
       'body': body,
-      'calledAt': DateTime.now().millisecondsSinceEpoch,
+      'calledAt': DateTime
+          .now()
+          .millisecondsSinceEpoch,
       'repeatInterval': RepeatInterval.Weekly.index,
       'repeatTime': notificationTime.toMap(),
       'day': day.value,
@@ -147,15 +203,17 @@ class AndroidFlutterLocalNotificationsPlugin
   }
 
   @override
-  Future<void> periodicallyShow(
-      int id, String title, String body, RepeatInterval repeatInterval,
+  Future<void> periodicallyShow(int id, String title, String body,
+      RepeatInterval repeatInterval,
       {AndroidNotificationDetails notificationDetails, String payload}) async {
     validateId(id);
     await _channel.invokeMethod('periodicallyShow', <String, dynamic>{
       'id': id,
       'title': title,
       'body': body,
-      'calledAt': DateTime.now().millisecondsSinceEpoch,
+      'calledAt': DateTime
+          .now()
+          .millisecondsSinceEpoch,
       'repeatInterval': repeatInterval.index,
       'platformSpecifics': notificationDetails?.toMap(),
       'payload': payload ?? ''
@@ -179,6 +237,8 @@ class AndroidFlutterLocalNotificationsPlugin
     switch (call.method) {
       case 'selectNotification':
         return _onSelectNotification(call.arguments);
+      case 'dismissNotification':
+        return _onDismissNotification?.call(call.arguments);
       default:
         return Future.error('method not defined');
     }
@@ -246,7 +306,9 @@ class IOSFlutterLocalNotificationsPlugin
       'id': id,
       'title': title,
       'body': body,
-      'calledAt': DateTime.now().millisecondsSinceEpoch,
+      'calledAt': DateTime
+          .now()
+          .millisecondsSinceEpoch,
       'repeatInterval': RepeatInterval.Daily.index,
       'repeatTime': notificationTime.toMap(),
       'platformSpecifics': notificationDetails?.toMap(),
@@ -255,8 +317,7 @@ class IOSFlutterLocalNotificationsPlugin
   }
 
   /// Shows a notification on weekly interval at the specified day and time.
-  Future<void> showWeeklyAtDayAndTime(
-      int id,
+  Future<void> showWeeklyAtDayAndTime(int id,
       String title,
       String body,
       Day day,
@@ -269,7 +330,9 @@ class IOSFlutterLocalNotificationsPlugin
       'id': id,
       'title': title,
       'body': body,
-      'calledAt': DateTime.now().millisecondsSinceEpoch,
+      'calledAt': DateTime
+          .now()
+          .millisecondsSinceEpoch,
       'repeatInterval': RepeatInterval.Weekly.index,
       'repeatTime': notificationTime.toMap(),
       'day': day.value,
@@ -295,15 +358,17 @@ class IOSFlutterLocalNotificationsPlugin
   }
 
   @override
-  Future<void> periodicallyShow(
-      int id, String title, String body, RepeatInterval repeatInterval,
+  Future<void> periodicallyShow(int id, String title, String body,
+      RepeatInterval repeatInterval,
       {IOSNotificationDetails notificationDetails, String payload}) async {
     validateId(id);
     await _channel.invokeMethod('periodicallyShow', <String, dynamic>{
       'id': id,
       'title': title,
       'body': body,
-      'calledAt': DateTime.now().millisecondsSinceEpoch,
+      'calledAt': DateTime
+          .now()
+          .millisecondsSinceEpoch,
       'repeatInterval': repeatInterval.index,
       'platformSpecifics': notificationDetails?.toMap(),
       'payload': payload ?? ''

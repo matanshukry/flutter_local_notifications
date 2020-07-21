@@ -21,6 +21,9 @@ final BehaviorSubject<ReceivedNotification> didReceiveLocalNotificationSubject =
 final BehaviorSubject<String> selectNotificationSubject =
     BehaviorSubject<String>();
 
+final BehaviorSubject<String> dismissNotificationSubject =
+    BehaviorSubject<String>();
+
 NotificationAppLaunchDetails notificationAppLaunchDetails;
 
 class ReceivedNotification {
@@ -66,12 +69,32 @@ Future<void> main() async {
       debugPrint('notification payload: ' + payload);
     }
     selectNotificationSubject.add(payload);
-  });
+  }, onDismissNotification: onDismissNotification);
   runApp(
     MaterialApp(
       home: HomePage(),
     ),
   );
+}
+
+Future<void> onDismissNotification(String payload) async {
+  debugPrint('on Dismiss Notification: ${payload}');
+
+  const dismissPayload = 'DISMISS';
+  if (dismissPayload == payload) {
+    return;
+  }
+
+  final plugin = FlutterLocalNotificationsPlugin();
+  var androidPlatformChannelSpecifics = AndroidNotificationDetails(
+      'chn_dismiss_id', 'chn_dismiss_name', 'chn_dismiss_desc',
+      importance: Importance.Max, priority: Priority.High, ticker: 'ticker');
+  var iOSPlatformChannelSpecifics = IOSNotificationDetails();
+  var platformChannelSpecifics = NotificationDetails(
+      androidPlatformChannelSpecifics, iOSPlatformChannelSpecifics);
+  await plugin.show(
+      0, 'Dismiss Title', 'Dismiss Body', platformChannelSpecifics,
+      payload: dismissPayload);
 }
 
 class PaddedRaisedButton extends StatelessWidget {
@@ -100,6 +123,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final MethodChannel platform =
       MethodChannel('crossingthestreams.io/resourceResolver');
+
   @override
   void initState() {
     super.initState();
@@ -1101,6 +1125,7 @@ class SecondScreen extends StatefulWidget {
 
 class SecondScreenState extends State<SecondScreen> {
   String _payload;
+
   @override
   void initState() {
     super.initState();
