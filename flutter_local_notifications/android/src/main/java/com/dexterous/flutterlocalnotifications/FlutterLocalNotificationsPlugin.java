@@ -1016,12 +1016,6 @@ public class FlutterLocalNotificationsPlugin extends BroadcastReceiver
             channel.invokeMethod("selectNotification", payload);
             return true;
         }
-        if (DISMISS_NOTIFICATION.equals(intent.getAction()))
-        {
-            String payload = intent.getStringExtra(PAYLOAD);
-            channel.invokeMethod("dismissNotification", payload);
-            return true;
-        }
         return false;
     }
 
