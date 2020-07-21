@@ -3,7 +3,7 @@ import 'dart:async';
 /// Signature of callback passed to [initialize] that is triggered when user taps on a notification.
 typedef SelectNotificationCallback = Future<dynamic> Function(String payload);
 
-/// Signature of callback passed to [initialize] that is trigger when user dismiss a notification
+/// Signature of callback passed to [initialize] that is triggered when user dismiss a notification
 typedef DismissNotificationCallback = Future<void> Function(String id);
 
 /// Signature of the callback that is triggered when a notification is shown whilst the app is in the foreground.
